@@ -2,60 +2,72 @@
     // Fungsi mendapatkan parameter dari URL
     function getQueryParam(p) { return new URLSearchParams(window.location.search).get(p); }
 
-    // AMBIL DATA DARI URL (Standard Format)
-    var source = getQueryParam('utm_source');       // cth: facebook
-    var camp   = getQueryParam('utm_campaign');     // cth: PromoRaya
-    var adset  = getQueryParam('utm_term');         // cth: Broad_Audience (term = adset)
-    var ad     = getQueryParam('utm_content');      // cth: Video_Testimoni (content = ad name)
+    // AMBIL DATA DARI URL
+    var source = getQueryParam('utm_source');       
+    var camp   = getQueryParam('utm_campaign');     
+    var adset  = getQueryParam('utm_term');         
+    var ad     = getQueryParam('utm_content');      
 
-    // Jika tiada sebarang data UTM, stop.
-    if (!source && !camp) return;
+    // NOTA: Kita tak boleh "return" (stop) kat sini walaupun tak ada data,
+    // sebab kita masih perlu jalankan kod untuk SOROK field di bawah.
 
     // GABUNGKAN DATA UNTUK FIELD 3
-    // Format: Campaign | Adset | Ad
-    // Kita guna "|| ''" supaya kalau data kosong, dia tak tulis "null", dia jadi kosong je.
     var dataGabungan = (camp || '') + '|' + (adset || '') + '|' + (ad || '');
 
-    // Debugging (Boleh tengok di Console browser)
-    console.log("Data untuk Field 3: " + dataGabungan);
-
     function cubaIsiBorang() {
-        // --- FIELD 2: SOURCE (Wajib ada untuk tahu traffic dari mana) ---
+        // Cari elemen dalam page
         var f2 = document.querySelector('[name="extra_field_2"]') || document.getElementById('extra_field_2');
         var l2 = document.querySelector('label[for="extra_field_2"]');
         
-        // --- FIELD 3: KEMPEN | ADSET | AD ---
         var f3 = document.querySelector('[name="extra_field_3"]') || document.getElementById('extra_field_3');
         var l3 = document.querySelector('label[for="extra_field_3"]');
 
-        var berjaya = false;
+        var borangDiJumpai = false; // Penanda untuk stop loop
 
-        // Isi Field 2 (Source)
-        if (f2 && source) {
-            f2.value = source;
-            f2.style.display = 'none'; f2.style.visibility = 'hidden';
+        // --- URUSKAN FIELD 2 (SOURCE) ---
+        if (f2) {
+            // 1. WAJIB SOROK (Tak kira ada UTM atau tak)
+            f2.style.display = 'none';
+            f2.style.visibility = 'hidden';
             if (l2) l2.style.display = 'none';
-            berjaya = true;
+
+            // 2. ISI DATA (Hanya jika ada source)
+            if (source) {
+                f2.value = source;
+            }
+            
+            borangDiJumpai = true;
         }
 
-        // Isi Field 3 (Gabungan 3 Data)
+        // --- URUSKAN FIELD 3 (GABUNGAN) ---
         if (f3) {
-            f3.value = dataGabungan; // Masukkan data yang dah digabung tadi
-            f3.style.display = 'none'; f3.style.visibility = 'hidden';
+            // 1. WAJIB SOROK (Tak kira ada UTM atau tak)
+            f3.style.display = 'none';
+            f3.style.visibility = 'hidden';
             if (l3) l3.style.display = 'none';
-            berjaya = true;
+
+            // 2. ISI DATA (Hanya jika ada salah satu data kempen)
+            // Kita check (camp || adset || ad) supaya tak isi kalau semua kosong
+            if (camp || adset || ad) {
+                f3.value = dataGabungan;
+            }
+
+            borangDiJumpai = true;
         }
 
-        return berjaya;
+        return borangDiJumpai;
     }
 
     // MEKANISME RETRY (Cari borang selama 10 saat)
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
+        // Kalau borang dah jumpa dan disorok, kita stop interval
         if (cubaIsiBorang()) {
-            clearInterval(interval); // Stop bila jumpa
+            console.log("UTM Tracker: Borang jumpa & disorok.");
+            clearInterval(interval); 
         } else if (percubaan >= 20) {
+            console.log("UTM Tracker: Borang tak jumpa (Timeout).");
             clearInterval(interval); // Give up
         }
     }, 500);

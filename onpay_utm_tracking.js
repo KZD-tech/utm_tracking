@@ -1,43 +1,112 @@
 (function() {
-    console.log("UTM V6: Target Parent Form-Group");
+    // ==========================================
+    // CONFIGURATION
+    // ==========================================
+    var config = {
+        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "onpay.com"], // Masukkan domain anda
+        debugMode: false, // Tukar 'true' jika nak tengok log di console, 'false' untuk production
+        storageKey: "my_utm_data_v1" // Kunci simpanan dalam browser
+    };
 
-    // 1. FUNGSI AMBIL PARAMETER URL
+    function log(msg) {
+        if (config.debugMode) console.log("[UTM V8]: " + msg);
+    }
+
+    // ==========================================
+    // 1. SECURITY: CHECK DOMAIN
+    // ==========================================
+    var currentHostname = window.location.hostname;
+    var isAllowed = config.allowedDomains.some(function(domain) {
+        return currentHostname.indexOf(domain) > -1;
+    });
+
+    if (!isAllowed) {
+        // Jangan log apa-apa supaya hacker tak tahu script ni wujud, just return.
+        return; 
+    }
+
+    log("Domain sah. Script bermula.");
+
+    // ==========================================
+    // 2. LOGIK PENGURUSAN DATA (STICKY UTM)
+    // ==========================================
+    
+    // Helper: Ambil dari URL
     function getQueryParam(p) { return new URLSearchParams(window.location.search).get(p); }
 
-    var source = getQueryParam('utm_source');       
-    var camp   = getQueryParam('utm_campaign');     
-    var adset  = getQueryParam('utm_term');         
-    var ad     = getQueryParam('utm_content');      
+    // A. Cuba ambil data FRESH dari URL
+    var rawData = {
+        source: getQueryParam('utm_source'),
+        camp: getQueryParam('utm_campaign'),
+        term: getQueryParam('utm_term'),
+        content: getQueryParam('utm_content')
+    };
 
-    var dataGabungan = (camp || '') + '|' + (adset || '') + '|' + (ad || '');
+    // B. Logik Simpanan (Storage)
+    var finalData = {};
+    var savedData = localStorage.getItem(config.storageKey);
+    if (savedData) savedData = JSON.parse(savedData);
 
-    // 2. FUNGSI KHAS: CARI DAN HAPUSKAN FORM-GROUP (WRAPPER)
+    if (rawData.source) {
+        // KES 1: Ada UTM baru di URL. Guna yang ini & Update Storage.
+        finalData = rawData;
+        localStorage.setItem(config.storageKey, JSON.stringify(rawData));
+        log("Data baru dikesan & disimpan.");
+    } else if (savedData && savedData.source) {
+        // KES 2: URL kosong, tapi ada data lama (Sticky).
+        finalData = savedData;
+        log("Menggunakan data simpanan (Sticky).");
+    } else {
+        // KES 3: URL kosong, Storage kosong. Check Referrer (Organic).
+        var referrer = document.referrer;
+        if (referrer) {
+            var domainRef = referrer.split('/')[2];
+            if (domainRef) {
+                finalData = {
+                    source: domainRef.replace('www.', '') + '_organic',
+                    camp: 'direct_traffic',
+                    term: '',
+                    content: ''
+                };
+                log("Data organik dikesan dari: " + domainRef);
+            }
+        }
+    }
+
+    // Format data untuk dimasukkan ke borang
+    var valueSource = finalData.source || '';
+    var valueCombo  = (finalData.camp || '') + '|' + (finalData.term || '') + '|' + (finalData.content || '');
+
+    // Kalau kosong sangat (direct type-in), mungkin kita tak nak isi apa-apa atau set default
+    // valueCombo = valueCombo === '||' ? '' : valueCombo; 
+
+    // ==========================================
+    // 3. LOGIK DOM & HIDE (NUCLEAR OPTION)
+    // ==========================================
+    
+    // Fungsi hapuskan parent form-group
     function nukearFormGroup(elementID, valueToInsert) {
-        // Cari input dulu
         var el = document.getElementById(elementID) || document.querySelector('[name="' + elementID + '"]');
 
         if (el) {
-            // A. Masukkan data (jika ada)
-            if (valueToInsert) {
+            // Isi data hanya jika ada value
+            if (valueToInsert && valueToInsert !== '||') {
                 el.value = valueToInsert;
-                el.dispatchEvent(new Event('change')); // Bagitahu sistem data dah masuk
+                el.dispatchEvent(new Event('change')); // Trigger React/Vue change
+                el.dispatchEvent(new Event('input'));  // Trigger native input
             }
 
-            // B. TEKNIK TRAVERSAL (Panjat naik ke atas)
-            // Kita guna 'closest' untuk cari bapa terdekat yang ada class 'form-group'
+            // Hide Logic
             var parentGroup = el.closest('.form-group');
+            var styles = 'display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; visibility: hidden !important; opacity: 0 !important;';
 
             if (parentGroup) {
-                // HAPUSKAN PARENT TERUS!
-                // Kita guna setAttribute style supaya ia override semua CSS lain
-                parentGroup.setAttribute('style', 'display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; visibility: hidden !important; opacity: 0 !important;');
-                
-                return true; // Misi berjaya
+                parentGroup.setAttribute('style', styles);
+                return true; 
             } else {
-                // Fallback: Kalau tak jumpa class form-group, kita cuba naik 2 level (parent -> parent)
-                // Sebab struktur dalam screenshot: Input -> Div(col-md-7) -> Div(form-group)
+                // Fallback traversal
                 if (el.parentElement && el.parentElement.parentElement) {
-                     el.parentElement.parentElement.style.display = 'none';
+                     el.parentElement.parentElement.setAttribute('style', styles);
                      return true;
                 }
             }
@@ -45,42 +114,36 @@
         return false;
     }
 
-    // 3. FUNGSI CSS BACKUP (Incase JS lambat load)
+    // CSS Injection (Backup supaya tak berkelip)
     function injectCSS() {
         var css = `
-            /* Target specifically wrapper form-group yang ada extra_field */
-            .form-group:has(#extra_field_2),
-            .form-group:has(#extra_field_3),
-            div:has(> .col-md-7 > #extra_field_2), 
-            div:has(> .col-md-7 > #extra_field_3) {
-                display: none !important;
-            }
+            .form-group:has(#extra_field_2), .form-group:has(#extra_field_3),
+            div:has(> .col-md-7 > #extra_field_2), div:has(> .col-md-7 > #extra_field_3),
+            #extra_field_2, #extra_field_3 { display: none !important; }
         `;
         var head = document.head || document.getElementsByTagName('head')[0];
         var style = document.createElement('style');
         head.appendChild(style);
         style.appendChild(document.createTextNode(css));
     }
-    // Cuba jalankan CSS injection (browser moden shj support :has)
     try { injectCSS(); } catch(e) {}
 
-    // 4. LOOP CHECKER (Jalankan sampai jumpa)
+    // ==========================================
+    // 4. EXECUTION LOOP
+    // ==========================================
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
         
-        // Cuba hapuskan wrapper
-        var f2_done = nukearFormGroup('extra_field_2', source);
-        var f3_done = nukearFormGroup('extra_field_3', dataGabungan);
+        var f2_done = nukearFormGroup('extra_field_2', valueSource);
+        var f3_done = nukearFormGroup('extra_field_3', valueCombo);
 
-        // Kalau dah berjaya dua-dua, STOP.
         if (f2_done && f3_done) {
-            console.log("UTM V6: Semua wrapper form-group berjaya dihapuskan.");
+            log("Selesai! Data dimasukkan & Field disorok.");
             clearInterval(interval);
         }
 
-        // Timeout 20 saat
-        if (percubaan > 40) clearInterval(interval);
+        if (percubaan > 40) clearInterval(interval); // 20 saat timeout
 
     }, 500);
 

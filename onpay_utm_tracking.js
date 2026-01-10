@@ -1,54 +1,9 @@
 (function() {
-    // --- BAHAGIAN 1: CSS INJECTION (NUCLEAR OPTION) ---
-    // Kita suntik CSS ni terus ke dalam head website supaya field
-    // tu hilang serta-merta walaupun borang belum loading.
-    function injectCSS() {
-        var css = `
-            /* Sorok Input */
-            input[name="extra_field_2"], 
-            input[name="extra_field_3"],
-            #extra_field_2, 
-            #extra_field_3 {
-                display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
-                height: 0 !important;
-                margin: 0 !important;
-                padding: 0 !important;
-            }
-            
-            /* Sorok Label yang berkaitan */
-            label[for="extra_field_2"], 
-            label[for="extra_field_3"] {
-                display: none !important;
-            }
-            
-            /* (Optional) Cuba sorok wrapper OnPay jika ada class specific */
-            .form-group:has(input[name="extra_field_2"]),
-            .form-group:has(input[name="extra_field_3"]) {
-                display: none !important;
-            }
-        `;
-        var head = document.head || document.getElementsByTagName('head')[0];
-        var style = document.createElement('style');
-        head.appendChild(style);
-        style.type = 'text/css';
-        if (style.styleSheet){
-          style.styleSheet.cssText = css;
-        } else {
-          style.appendChild(document.createTextNode(css));
-        }
-    }
-    
-    // Jalankan injection CSS serta merta!
-    injectCSS();
-
-
-    // --- BAHAGIAN 2: LOGIK UTM ---
     
     // Fungsi mendapatkan parameter dari URL
     function getQueryParam(p) { return new URLSearchParams(window.location.search).get(p); }
 
+    // AMBIL DATA DARI URL
     var source = getQueryParam('utm_source');       
     var camp   = getQueryParam('utm_campaign');     
     var adset  = getQueryParam('utm_term');         
@@ -56,44 +11,57 @@
 
     var dataGabungan = (camp || '') + '|' + (adset || '') + '|' + (ad || '');
 
-    function cubaIsiBorang() {
-        var f2 = document.querySelector('[name="extra_field_2"]') || document.getElementById('extra_field_2');
-        var f3 = document.querySelector('[name="extra_field_3"]') || document.getElementById('extra_field_3');
-        var borangDiJumpai = false; 
+    // Fungsi untuk sorok element DAN bapak dia (container)
+    function killElement(elementName) {
+        // Cari Input berdasarkan Name atau ID
+        var el = document.querySelector('[name="' + elementName + '"]') || document.getElementById(elementName);
+        
+        if (el) {
+            // 1. Masukkan data dulu (kalau ada)
+            // Logic: Kalau field 2, masuk source. Kalau field 3, masuk gabungan.
+            if (elementName === 'extra_field_2' && source) el.value = source;
+            if (elementName === 'extra_field_3' && (camp || adset || ad)) el.value = dataGabungan;
 
-        // Field 2 (Source)
-        if (f2) {
-            // Kita double confirm sorok guna inline style juga
-            f2.style.setProperty('display', 'none', 'important');
+            // 2. TEKNIK SOROK AGRESIF (Traversing Up)
             
-            // Cari label dia secara manual kalau CSS tak detect
-            var l2 = document.querySelector('label[for="extra_field_2"]');
-            if (l2) l2.style.setProperty('display', 'none', 'important');
+            // Level 1: Sorok Input tu sendiri
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
 
-            if (source) f2.value = source;
-            borangDiJumpai = true;
-        }
-
-        // Field 3 (Gabungan)
-        if (f3) {
-            f3.style.setProperty('display', 'none', 'important');
+            // Level 2: Cari Container terdekat (biasanya .form-group)
+            // Kita cari elemen bapa yang ada class "form-group" atau "row"
+            var parent = el.closest('.form-group') || el.closest('.row') || el.parentElement.parentElement;
             
-            var l3 = document.querySelector('label[for="extra_field_3"]');
-            if (l3) l3.style.setProperty('display', 'none', 'important');
-
-            if (camp || adset || ad) f3.value = dataGabungan;
-            borangDiJumpai = true;
+            if (parent) {
+                parent.style.display = 'none';
+                parent.style.visibility = 'hidden';
+                parent.style.height = '0';
+                parent.style.margin = '0';
+                parent.style.padding = '0';
+            }
+            
+            return true; // Berjaya jumpa & sorok
         }
-
-        return borangDiJumpai;
+        return false; // Tak jumpa
     }
 
+    // MEKANISME RETRY
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
-        if (cubaIsiBorang()) {
+        
+        // Cuba bunuh (hide) kedua-dua field
+        var f2_done = killElement('extra_field_2');
+        var f3_done = killElement('extra_field_3');
+
+        // Kalau dua-dua dah jumpa & disorok, STOP.
+        if (f2_done && f3_done) {
+            console.log("UTM Tracker: Semua field berjaya disorok.");
             clearInterval(interval); 
-        } else if (percubaan >= 40) { // Kita naikkan had masa ke 20 saat (40x500ms)
+        } 
+        
+        // Timeout lepas 15 saat (30 x 500ms)
+        if (percubaan >= 30) {
             clearInterval(interval); 
         }
     }, 500);

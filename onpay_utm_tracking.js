@@ -1,7 +1,7 @@
 (function() {
-    console.log("UTM Script V5: Bermula...");
+    console.log("UTM V6: Target Parent Form-Group");
 
-    // 1. AMBIL DATA DARI URL
+    // 1. FUNGSI AMBIL PARAMETER URL
     function getQueryParam(p) { return new URLSearchParams(window.location.search).get(p); }
 
     var source = getQueryParam('utm_source');       
@@ -11,16 +11,49 @@
 
     var dataGabungan = (camp || '') + '|' + (adset || '') + '|' + (ad || '');
 
-    // 2. FUNGSI CSS INJECTION (Untuk hilangkan Label & Input serta-merta)
+    // 2. FUNGSI KHAS: CARI DAN HAPUSKAN FORM-GROUP (WRAPPER)
+    function nukearFormGroup(elementID, valueToInsert) {
+        // Cari input dulu
+        var el = document.getElementById(elementID) || document.querySelector('[name="' + elementID + '"]');
+
+        if (el) {
+            // A. Masukkan data (jika ada)
+            if (valueToInsert) {
+                el.value = valueToInsert;
+                el.dispatchEvent(new Event('change')); // Bagitahu sistem data dah masuk
+            }
+
+            // B. TEKNIK TRAVERSAL (Panjat naik ke atas)
+            // Kita guna 'closest' untuk cari bapa terdekat yang ada class 'form-group'
+            var parentGroup = el.closest('.form-group');
+
+            if (parentGroup) {
+                // HAPUSKAN PARENT TERUS!
+                // Kita guna setAttribute style supaya ia override semua CSS lain
+                parentGroup.setAttribute('style', 'display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; visibility: hidden !important; opacity: 0 !important;');
+                
+                return true; // Misi berjaya
+            } else {
+                // Fallback: Kalau tak jumpa class form-group, kita cuba naik 2 level (parent -> parent)
+                // Sebab struktur dalam screenshot: Input -> Div(col-md-7) -> Div(form-group)
+                if (el.parentElement && el.parentElement.parentElement) {
+                     el.parentElement.parentElement.style.display = 'none';
+                     return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    // 3. FUNGSI CSS BACKUP (Incase JS lambat load)
     function injectCSS() {
         var css = `
-            /* Sorok Input dan Label secara agresif */
-            #extra_field_2, #extra_field_3,
-            input[name="extra_field_2"], input[name="extra_field_3"],
-            label[for="extra_field_2"], label[for="extra_field_3"] {
+            /* Target specifically wrapper form-group yang ada extra_field */
+            .form-group:has(#extra_field_2),
+            .form-group:has(#extra_field_3),
+            div:has(> .col-md-7 > #extra_field_2), 
+            div:has(> .col-md-7 > #extra_field_3) {
                 display: none !important;
-                visibility: hidden !important;
-                opacity: 0 !important;
             }
         `;
         var head = document.head || document.getElementsByTagName('head')[0];
@@ -28,51 +61,27 @@
         head.appendChild(style);
         style.appendChild(document.createTextNode(css));
     }
-    injectCSS();
+    // Cuba jalankan CSS injection (browser moden shj support :has)
+    try { injectCSS(); } catch(e) {}
 
-    // 3. FUNGSI JS: CARI DAN SOROK "PARENT" (FORM-GROUP)
-    function uruskanField(fieldID, valueToInsert) {
-        var el = document.getElementById(fieldID) || document.querySelector('[name="' + fieldID + '"]');
-
-        if (el) {
-            // A. Masukkan Data (Jika ada)
-            if (valueToInsert) {
-                el.value = valueToInsert;
-                // Trigger event 'change' supaya sistem borang tahu ada data masuk
-                el.dispatchEvent(new Event('change')); 
-            }
-
-            // B. Cari BAPA (form-group) dan sorokkan
-            // Berdasarkan screenshot: Input > Div(col-md-7) > Div(form-group)
-            var parent = el.closest('.form-group'); 
-            
-            if (parent) {
-                parent.style.display = 'none';
-                parent.style.visibility = 'hidden';
-                parent.style.height = '0px';
-                parent.style.margin = '0px';
-                parent.style.padding = '0px'; // Kemaskan ruang kosong
-                return true; // Berjaya jumpa & sorok
-            }
-        }
-        return false;
-    }
-
-    // 4. LOOP CHECKER (Jalankan berulang kali sampai jumpa borang)
+    // 4. LOOP CHECKER (Jalankan sampai jumpa)
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
         
-        // Cuba proses Field 2 & 3
-        var f2_done = uruskanField('extra_field_2', source);
-        var f3_done = uruskanField('extra_field_3', dataGabungan);
+        // Cuba hapuskan wrapper
+        var f2_done = nukearFormGroup('extra_field_2', source);
+        var f3_done = nukearFormGroup('extra_field_3', dataGabungan);
 
-        // Kalau dah berjaya sorok dua-dua, atau dah cuba 50 kali (25 saat), stop.
-        if ((f2_done && f3_done) || percubaan > 50) {
-            if(f2_done && f3_done) console.log("UTM Script: Berjaya sorok semua field.");
+        // Kalau dah berjaya dua-dua, STOP.
+        if (f2_done && f3_done) {
+            console.log("UTM V6: Semua wrapper form-group berjaya dihapuskan.");
             clearInterval(interval);
         }
 
-    }, 500); // Check setiap setengah saat
+        // Timeout 20 saat
+        if (percubaan > 40) clearInterval(interval);
+
+    }, 500);
 
 })();

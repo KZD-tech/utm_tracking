@@ -1,9 +1,9 @@
 (function() {
-    
-    // Fungsi mendapatkan parameter dari URL
+    console.log("UTM Script V5: Bermula...");
+
+    // 1. AMBIL DATA DARI URL
     function getQueryParam(p) { return new URLSearchParams(window.location.search).get(p); }
 
-    // AMBIL DATA DARI URL
     var source = getQueryParam('utm_source');       
     var camp   = getQueryParam('utm_campaign');     
     var adset  = getQueryParam('utm_term');         
@@ -11,59 +11,68 @@
 
     var dataGabungan = (camp || '') + '|' + (adset || '') + '|' + (ad || '');
 
-    // Fungsi untuk sorok element DAN bapak dia (container)
-    function killElement(elementName) {
-        // Cari Input berdasarkan Name atau ID
-        var el = document.querySelector('[name="' + elementName + '"]') || document.getElementById(elementName);
-        
+    // 2. FUNGSI CSS INJECTION (Untuk hilangkan Label & Input serta-merta)
+    function injectCSS() {
+        var css = `
+            /* Sorok Input dan Label secara agresif */
+            #extra_field_2, #extra_field_3,
+            input[name="extra_field_2"], input[name="extra_field_3"],
+            label[for="extra_field_2"], label[for="extra_field_3"] {
+                display: none !important;
+                visibility: hidden !important;
+                opacity: 0 !important;
+            }
+        `;
+        var head = document.head || document.getElementsByTagName('head')[0];
+        var style = document.createElement('style');
+        head.appendChild(style);
+        style.appendChild(document.createTextNode(css));
+    }
+    injectCSS();
+
+    // 3. FUNGSI JS: CARI DAN SOROK "PARENT" (FORM-GROUP)
+    function uruskanField(fieldID, valueToInsert) {
+        var el = document.getElementById(fieldID) || document.querySelector('[name="' + fieldID + '"]');
+
         if (el) {
-            // 1. Masukkan data dulu (kalau ada)
-            // Logic: Kalau field 2, masuk source. Kalau field 3, masuk gabungan.
-            if (elementName === 'extra_field_2' && source) el.value = source;
-            if (elementName === 'extra_field_3' && (camp || adset || ad)) el.value = dataGabungan;
+            // A. Masukkan Data (Jika ada)
+            if (valueToInsert) {
+                el.value = valueToInsert;
+                // Trigger event 'change' supaya sistem borang tahu ada data masuk
+                el.dispatchEvent(new Event('change')); 
+            }
 
-            // 2. TEKNIK SOROK AGRESIF (Traversing Up)
-            
-            // Level 1: Sorok Input tu sendiri
-            el.style.display = 'none';
-            el.style.visibility = 'hidden';
-
-            // Level 2: Cari Container terdekat (biasanya .form-group)
-            // Kita cari elemen bapa yang ada class "form-group" atau "row"
-            var parent = el.closest('.form-group') || el.closest('.row') || el.parentElement.parentElement;
+            // B. Cari BAPA (form-group) dan sorokkan
+            // Berdasarkan screenshot: Input > Div(col-md-7) > Div(form-group)
+            var parent = el.closest('.form-group'); 
             
             if (parent) {
                 parent.style.display = 'none';
                 parent.style.visibility = 'hidden';
-                parent.style.height = '0';
-                parent.style.margin = '0';
-                parent.style.padding = '0';
+                parent.style.height = '0px';
+                parent.style.margin = '0px';
+                parent.style.padding = '0px'; // Kemaskan ruang kosong
+                return true; // Berjaya jumpa & sorok
             }
-            
-            return true; // Berjaya jumpa & sorok
         }
-        return false; // Tak jumpa
+        return false;
     }
 
-    // MEKANISME RETRY
+    // 4. LOOP CHECKER (Jalankan berulang kali sampai jumpa borang)
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
         
-        // Cuba bunuh (hide) kedua-dua field
-        var f2_done = killElement('extra_field_2');
-        var f3_done = killElement('extra_field_3');
+        // Cuba proses Field 2 & 3
+        var f2_done = uruskanField('extra_field_2', source);
+        var f3_done = uruskanField('extra_field_3', dataGabungan);
 
-        // Kalau dua-dua dah jumpa & disorok, STOP.
-        if (f2_done && f3_done) {
-            console.log("UTM Tracker: Semua field berjaya disorok.");
-            clearInterval(interval); 
-        } 
-        
-        // Timeout lepas 15 saat (30 x 500ms)
-        if (percubaan >= 30) {
-            clearInterval(interval); 
+        // Kalau dah berjaya sorok dua-dua, atau dah cuba 50 kali (25 saat), stop.
+        if ((f2_done && f3_done) || percubaan > 50) {
+            if(f2_done && f3_done) console.log("UTM Script: Berjaya sorok semua field.");
+            clearInterval(interval);
         }
-    }, 500);
+
+    }, 500); // Check setiap setengah saat
 
 })();

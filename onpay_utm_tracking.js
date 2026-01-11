@@ -3,7 +3,7 @@
     // CONFIGURATION
     // ==========================================
     var config = {
-        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "onpay.com"], // Masukkan domain anda
+        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "komunitidakwahtarbiah.org, "onpay.com"], // Masukkan domain anda
         debugMode: false, // Tukar 'true' jika nak tengok log di console, 'false' untuk production
         storageKey: "my_utm_data_v1" // Kunci simpanan dalam browser
     };

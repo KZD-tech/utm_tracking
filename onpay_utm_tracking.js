@@ -4,7 +4,7 @@
     // ==========================================
     var config = {
         // Masukkan domain anda di sini
-        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "komunitidakwahtarbiah.org", "onpay.com"], 
+        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "komunitidakwahtarbiah.org", "onpay.com", "fidyah.ihsanku.org"], 
         debugMode: false, // Tukar 'true' jika nak tengok log di console
         storageKey: "my_utm_data_v1" // Kunci simpanan dalam browser
     };

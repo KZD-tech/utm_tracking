@@ -1,0 +1,26 @@
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    // 1. Ambil semua parameter (UTM) dari URL laman utama
+    var parentParams = window.location.search;
+
+    // 2. Jika ada parameter, kita cari iframe borang
+    if (parentParams) {
+        // Gantikan 'daftar.ihsankorban.com' dengan URL sebenar iframe anda jika berbeza
+        var iframes = document.querySelectorAll('iframe[src*="daftar.ihsankorban.com"]');
+        
+        iframes.forEach(function(iframe) {
+            var currentSrc = iframe.src;
+            
+            // 3. Sambungkan UTM ke link iframe
+            if (currentSrc.indexOf('?') > -1) {
+                // Jika iframe dah ada tanda '?', tukar '?' dari parentParams jadi '&'
+                iframe.src = currentSrc + parentParams.replace('?', '&');
+            } else {
+                // Jika tiada '?', terus sambung
+                iframe.src = currentSrc + parentParams;
+            }
+            console.log("Berjaya hantar UTM ke iframe: ", iframe.src);
+        });
+    }
+});
+</script>

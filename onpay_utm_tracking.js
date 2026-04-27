@@ -4,13 +4,13 @@
     // ==========================================
     var config = {
         allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "ihsankorban.com", "daftar.ihsankorban.com", "komunitidakwahtarbiah.org", "onpay.com", "fidyah.ihsanku.org"], 
-        debugMode: false, 
+        debugMode: true, // Set true untuk test kat console
         storageKey: "my_utm_data_v1",
-        visitorKey: "returning_visitor_flag" // Kunci untuk kesan user lama
+        visitorKey: "returning_visitor_flag" 
     };
 
     function log(msg) {
-        if (config.debugMode) console.log("[UTM V10-GA]: " + msg);
+        if (config.debugMode) console.log("[UTM V11-GA]: " + msg);
     }
 
     // 1. SECURITY: CHECK DOMAIN
@@ -18,11 +18,10 @@
     var isAllowed = config.allowedDomains.some(function(domain) {
         return currentHostname.indexOf(domain) > -1;
     });
-
     if (!isAllowed) return; 
 
     // ==========================================
-    // 2. LOGIK NEW VS RETURNING
+    // 2. LOGIK NEW VS RETURNING (Mirroring GA4)
     // ==========================================
     var userStatus = "New";
     if (localStorage.getItem(config.visitorKey)) {
@@ -50,46 +49,41 @@
     if (rawData.source) {
         finalData = rawData;
         localStorage.setItem(config.storageKey, JSON.stringify(rawData));
-        log("Data baru dikesan.");
     } else if (savedData && savedData.source) {
         finalData = savedData;
-        log("Guna data Sticky.");
     } else {
         var referrer = document.referrer;
-        if (referrer) {
-            var domainRef = referrer.split('/')[2];
-            if (domainRef) {
-                finalData = {
-                    source: (domainRef.replace('www.', '') || 'direct') + '_organic',
-                    camp: 'direct_traffic',
-                    adset: '',
-                    ad: ''
-                };
-            }
-        }
+        var domainRef = referrer ? referrer.split('/')[2] : '';
+        finalData = {
+            source: domainRef ? domainRef.replace('www.', '') + '_organic' : 'direct',
+            camp: 'direct_traffic', adset: '', ad: ''
+        };
     }
 
-    // Tambah Status User ke dalam data
+    // Format Data untuk OnPay
     var valueSource = (finalData.source || 'direct') + ' (' + userStatus + ')';
     var valueCombo  = (finalData.camp || '') + ' | ' + (finalData.adset || '') + ' | ' + (finalData.ad || '');
 
     // ==========================================
     // 4. HANTAR DATA KE GOOGLE ANALYTICS (GA4)
     // ==========================================
-    if (typeof gtag === 'function') {
-        gtag('event', 'utm_tracking_data', {
-            'utm_source_custom': valueSource,
-            'utm_campaign_custom': finalData.camp,
-            'user_type': userStatus,
-            'full_utm_string': valueCombo
-        });
-        log("Data dihantar ke GA4.");
-    } else {
-        log("GA4 (gtag) tidak dijumpai.");
+    function sendToGA() {
+        if (typeof gtag === 'function') {
+            gtag('event', 'utm_user_sync', {
+                'utm_source_full': valueSource,
+                'user_type': userStatus, // Parameter ini anda kena taip manual di GA4
+                'campaign_name': finalData.camp
+            });
+            log("Berjaya hantar ke GA4: " + userStatus);
+        } else {
+            // Jika gtag belum ready, cuba lagi selepas 1 saat
+            setTimeout(sendToGA, 1000);
+        }
     }
+    sendToGA();
 
     // ==========================================
-    // 5. LOGIK DOM & HIDE
+    // 5. LOGIK BORANG (ONPAY HIDE & FILL)
     // ==========================================
     function nukearFormGroup(elementID, valueToInsert) {
         var el = document.getElementById(elementID) || document.querySelector('[name="' + elementID + '"]');
@@ -99,31 +93,24 @@
                 el.dispatchEvent(new Event('change')); 
                 el.dispatchEvent(new Event('input'));  
             }
-            var parentGroup = el.closest('.form-group');
-            var styles = 'display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; visibility: hidden !important; opacity: 0 !important;';
+            // Sorok field supaya user tak pelik nampak data UTM
+            var parentGroup = el.closest('.form-group') || el.parentElement.parentElement;
             if (parentGroup) {
-                parentGroup.setAttribute('style', styles);
+                parentGroup.style.display = 'none';
+                parentGroup.style.visibility = 'hidden';
                 return true; 
             }
         }
         return false;
     }
 
-    // CSS Injection 
-    try {
-        var css = '.form-group:has(#extra_field_2), .form-group:has(#extra_field_3), #extra_field_2, #extra_field_3 { display: none !important; }';
-        var style = document.createElement('style');
-        style.appendChild(document.createTextNode(css));
-        document.head.appendChild(style);
-    } catch(e) {}
-
-    // Execution Loop
+    // Pantau form sehingga muncul (loop)
     var percubaan = 0;
     var interval = setInterval(function() {
         percubaan++;
-        var f2_done = nukearFormGroup('extra_field_2', valueSource);
-        var f3_done = nukearFormGroup('extra_field_3', valueCombo);
-        if ((f2_done && f3_done) || percubaan > 40) clearInterval(interval); 
-    }, 500);
+        var f2 = nukearFormGroup('extra_field_2', valueSource);
+        var f3 = nukearFormGroup('extra_field_3', valueCombo);
+        if ((f2 && f3) || percubaan > 30) clearInterval(interval); 
+    }, 1000);
 
 })();

@@ -3,7 +3,7 @@
     // CONFIGURATION
     // ==========================================
     var config = {
-        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "ihsankorban.com", "daftar.ihsankorban.com", "komunitidakwahtarbiah.org", "onpay.com", "fidyah.ihsanku.org"], 
+        allowedDomains: ["sumbang.ihsananak.org", "sumbang.ihsanku.org", "ihsankorban.com", "daftar.ihsankorban.com", "komunitidakwahtarbiah.org", "onpay.com", "fidyah.ihsanku.org", "donate.syriacare.org.my"], 
         debugMode: true, // Set true untuk test kat console
         storageKey: "my_utm_data_v1",
         visitorKey: "returning_visitor_flag" 

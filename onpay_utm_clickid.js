@@ -81,10 +81,14 @@
             : { gclid: '', gbraid: '', wbraid: '', fbclid: '' };
     }
 
-    // Fallback fbclid dari cookie _fbc Meta Pixel (format: fb.1.<ts>.<fbclid>)
-    if (!clickData.fbclid) {
-        var fbc = getCookie('_fbc');
-        if (fbc) clickData.fbclid = fbc.split('.').slice(3).join('.');
+    // Bina fbc format Meta (fb.1.<timestamp_ms>.<fbclid>) untuk upload CAPI/Offline
+    // Utamakan cookie _fbc Meta Pixel; kalau tiada, bina dari fbclid + timestamp klik.
+    var fbcCookie = getCookie('_fbc');
+    if (fbcCookie && (!clickData.fbclid || fbcCookie.indexOf(clickData.fbclid) > -1)) {
+        clickData.fbc = fbcCookie;
+        if (!clickData.fbclid) clickData.fbclid = fbcCookie.split('.').slice(3).join('.');
+    } else if (clickData.fbclid) {
+        clickData.fbc = 'fb.1.' + (clickData.ts || Date.now()) + '.' + clickData.fbclid;
     }
 
     // --- UTM ---
@@ -115,8 +119,8 @@
     // Format Data untuk OnPay
     var valueSource  = (finalData.source || 'direct') + ' (' + userStatus + ')';
     var valueCombo   = (finalData.camp || '') + ' | ' + (finalData.adset || '') + ' | ' + (finalData.ad || '');
-    // Hanya masukkan ID yang wujud, cth: "gclid:xxx | fbclid:yyy" atau "wbraid:zzz"
-    var valueClickId = ['gclid', 'gbraid', 'wbraid', 'fbclid']
+    // Hanya masukkan ID yang wujud, cth: "gclid:xxx | fbc:fb.1.1759630000000.yyy"
+    var valueClickId = ['gclid', 'gbraid', 'wbraid', 'fbc']
         .filter(function(k) { return clickData[k]; })
         .map(function(k) { return k + ':' + clickData[k]; })
         .join(' | ');
@@ -126,19 +130,28 @@
     // ==========================================
     // 4. HANTAR DATA KE GOOGLE ANALYTICS (GA4)
     // ==========================================
+    // Page OnPay load GA4 melalui GTM, jadi window.gtag mungkin tiada.
+    // gtag ada -> hantar terus. Tiada -> push ke dataLayer (perlu GA4 Event tag di GTM).
+    var gaPayload = {
+        'utm_source_full': valueSource,
+        'user_type': userStatus,          // Daftar sebagai custom dimension di GA4
+        'campaign_name': finalData.camp,
+        'has_gclid': (clickData.gclid || clickData.gbraid || clickData.wbraid) ? 'yes' : 'no',
+        'has_fbclid': clickData.fbclid ? 'yes' : 'no'
+    };
     var gaTries = 0;
     function sendToGA() {
         if (typeof gtag === 'function') {
-            gtag('event', 'utm_user_sync', {
-                'utm_source_full': valueSource,
-                'user_type': userStatus,          // Daftar sebagai custom dimension di GA4
-                'campaign_name': finalData.camp,
-                'has_gclid': (clickData.gclid || clickData.gbraid || clickData.wbraid) ? 'yes' : 'no',
-                'has_fbclid': clickData.fbclid ? 'yes' : 'no'
-            });
-            log("Berjaya hantar ke GA4: " + userStatus);
-        } else if (++gaTries < 15) {
+            gtag('event', 'utm_user_sync', gaPayload);
+            log("Berjaya hantar ke GA4 (gtag): " + userStatus);
+        } else if (++gaTries < 5) {
             setTimeout(sendToGA, 1000);
+        } else {
+            window.dataLayer = window.dataLayer || [];
+            var dl = { event: 'utm_user_sync' };
+            for (var k in gaPayload) dl[k] = gaPayload[k];
+            window.dataLayer.push(dl);
+            log("gtag tiada, push ke dataLayer: utm_user_sync");
         }
     }
     sendToGA();
